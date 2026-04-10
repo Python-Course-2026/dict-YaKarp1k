@@ -29,29 +29,42 @@ def healthcheck():
 
 @app.get("/items", response_model=list[ItemInDB])
 def list_items():
-    # TODO: верни все значения из db как список
-    pass
+    return list(db.values())
 
 
 @app.get("/items/search", response_model=list[ItemInDB])
 def search_items(name: str):
     # TODO: найди все товары, в названии которых есть подстрока name (без учёта регистра)
     # верни найденные товары как список
-    pass
+    search_name = name.lower()
+    result = []
 
+    for item in db.values():
+        if search_name in item.name.lower():
+            result.append(item)
+
+    return result
 
 @app.get("/items/expensive", response_model=list[ItemInDB])
 def get_expensive_items(min_price: float):
     # TODO: найди все товары с ценой >= min_price
     # верни их как список
-    pass
+    result = []
+
+    for item in db.values():
+        if item.price >= min_price:
+            result.append(item)
+
+    return result
 
 
 @app.get("/items/{item_id}", response_model=ItemInDB)
 def get_item(item_id: int):
     # TODO: проверь наличие ключа в db и верни значение
     # если ключа нет - raise HTTPException(status_code=404, detail="Item not found")
-    pass
+    if item_id not in db:
+        raise HTTPException(status_code=404, detail="Item not found")
+    return db[item_id]
 
 
 @app.post("/items", response_model=ItemInDB, status_code=201)
@@ -60,7 +73,13 @@ def create_item(item: Item, authorization: Optional[str] = Header(None)):
     # сгенерируй новый id (max ключ в db + 1)
     # создай ItemInDB и добавь в db по ключу
     # верни созданный объект
-    pass
+    require_admin(get_user_from_token(authorization))
+
+    new_id = max(db.keys()) + 1
+    new_item = ItemInDB(id=new_id, name=item.name, price=item.price)
+
+    db[new_id] = new_item
+    return new_item
 
 
 @app.delete("/items/{item_id}", status_code=204)
@@ -68,7 +87,12 @@ def delete_item(item_id: int, authorization: Optional[str] = Header(None)):
     # TODO: проверь админа: require_admin(get_user_from_token(authorization))
     # проверь наличие ключа и удали элемент из db
     # если ключа нет - raise HTTPException(status_code=404, detail="Item not found")
-    pass
+    require_admin(get_user_from_token(authorization))
+
+    if item_id not in db:
+        raise HTTPException(status_code=404, detail="Item not found")
+
+    del db[item_id]
 
 
 @app.put("/items/{item_id}", response_model=ItemInDB)
@@ -78,7 +102,15 @@ def update_item(item_id: int, item: Item, authorization: Optional[str] = Header(
     # если нет - raise HTTPException(status_code=404, detail="Item not found")
     # обнови name и price у существующего элемента
     # верни обновлённый объект
-    pass
+    require_admin(get_user_from_token(authorization))
+
+    if item_id not in db:
+        raise HTTPException(status_code=404, detail="Item not found")
+
+    db[item_id].name = item.name
+    db[item_id].price = item.price
+
+    return db[item_id]
 
 
 @app.get("/stats")
