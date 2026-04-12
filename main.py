@@ -119,7 +119,18 @@ def get_stats(authorization: Optional[str] = Header(None)):
     # верни статистику: {"total_items": ..., "total_value": ...}
     # total_items — количество товаров в db
     # total_value — сумма цен всех товаров
-    pass
+    require_admin(get_user_from_token(authorization))
+
+    total_items = len(db)
+    total_value = 0
+
+    for item in db.values():
+        total_value += item.price
+
+    return {
+        "total_items": total_items,
+        "total_value": total_value
+    }
 
 
 # --- Пользователи ---
@@ -176,7 +187,7 @@ def require_admin(user: Optional[UserInDB]):
 @app.get("/users", response_model=list[UserInDB])
 def list_users():
     # TODO: верни все значения из users_db как список
-    pass
+    return list(users_db.values())
 
 
 @app.get("/users/{user_id}", response_model=UserInDB)
@@ -184,7 +195,11 @@ def get_user(user_id: int, authorization: Optional[str] = Header(None)):
     # TODO: проверь админа: require_admin(get_user_from_token(authorization))
     # проверь наличие ключа в users_db и верни значение
     # если ключа нет - raise HTTPException(status_code=404, detail="User not found")
-    pass
+    require_admin(get_user_from_token(authorization))
+
+    if user_id not in users_db:
+        raise HTTPException(status_code=404, detail="User not found")
+    return users_db[user_id]
 
 
 @app.post("/users", response_model=UserInDB, status_code=201)
@@ -192,8 +207,17 @@ def create_user(user: User):
     # TODO: сгенерируй новый id (max ключ в users_db + 1)
     # создай UserInDB и добавь в users_db по ключу
     # верни созданный объект
-    pass
+    new_id = max(users_db.keys()) + 1
+    new_user = UserInDB(
+        id=new_id,
+        name=user.name,
+        email=user.email,
+        password=user.password,
+        is_admin=user.is_admin
+    )
 
+    user_db[new_id] = new_user
+    return new_user
 
 @app.post("/login")
 def login(login_req: LoginRequest):
