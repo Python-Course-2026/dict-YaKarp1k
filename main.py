@@ -234,7 +234,20 @@ def get_current_user(email: str):
     # TODO: найди пользователя по email в query параметре
     # если не найден - raise HTTPException(status_code=404, detail="User not found")
     # верни найденного пользователя
-    pass
+    found_user = None
+
+    for user in users_db.values():
+        if user.email == login_req.email:
+            found_user = user
+            break
+
+    if found_user is None:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    if found_user.password != login_req.password:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    return {"access_token": found_user.email, "token_type": "bearer"}
 
 
 # --- Корзина ---
@@ -256,7 +269,11 @@ def get_cart(authorization: Optional[str] = Header(None)):
     # TODO: верни все значения из cart_db как список
     # проверь авторизацию: user = get_user_from_token(authorization)
     # если нет пользователя - raise HTTPException(status_code=401, detail="Authorization required")
-    pass
+    user = get_user_from_token(authorization)
+    if not user:
+        raise HTTPException(status_code=401, detail="Authorization required")
+
+    return list(cart_db.values())
 
 
 @app.post("/cart/items", response_model=CartItemInDB, status_code=201)
@@ -266,7 +283,19 @@ def add_to_cart(cart_item: CartItem, authorization: Optional[str] = Header(None)
     # верни созданный объект
     # проверь авторизацию: user = get_user_from_token(authorization)
     # если нет пользователя - raise HTTPException(status_code=401, detail="Authorization required")
-    pass
+    user = get_user_from_token(authorization)
+    if not user:
+        raise HTTPException(status_code=401, detail="Authorization required")
+
+    new_id = max(cart_db.keys(), default=0) + 1
+    new_cart_item = CartItemInDB(
+        id=new_id,
+        item_id=cart_item.item_id,
+        quantity=cart_item.quantity
+    )
+
+    cart_db[new_id] = new_cart_item
+    return new_cart_item
 
 
 @app.delete("/cart/items/{cart_item_id}", status_code=204)
@@ -275,7 +304,14 @@ def remove_from_cart(cart_item_id: int, authorization: Optional[str] = Header(No
     # если ключа нет - raise HTTPException(status_code=404, detail="Cart item not found")
     # проверь авторизацию: user = get_user_from_token(authorization)
     # если нет пользователя - raise HTTPException(status_code=401, detail="Authorization required")
-    pass
+    user = get_user_from_token(authorization)
+    if not user:
+        raise HTTPException(status_code=401, detail="Authorization required")
+
+    if cart_item_id not in cart_db:
+        raise HTTPException(status_code=404, detail="Cart item not found")
+
+    del cart_db[cart_item_id]
 
 
 @app.get("/cart/total")
@@ -286,4 +322,14 @@ def get_cart_total(authorization: Optional[str] = Header(None)):
     # верни {"total": ...}
     # проверь авторизацию: user = get_user_from_token(authorization)
     # если нет пользователя - raise HTTPException(status_code=401, detail="Authorization required")
-    pass
+    user = get_user_from_token(authorization)
+    if not user:
+        raise HTTPException(status_code=401, detail="Authorization required")
+
+    total = 0
+
+    for cart_item in cart_db.values():
+        item = db[cart_item.item_id]
+        total += item.price * cart_item.quantity
+
+    return {"total": total}
